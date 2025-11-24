@@ -86,8 +86,8 @@ export function LoginForm({
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-6 rounded-[40px] p-6 md:p-10",
-        "bg-background text-foreground",
+        "relative flex flex-col gap-6 rounded-[40px] p-6 md:p-10 max-h-[90dvh] ",
+        " text-foreground",
         className
       )}
       style={{
@@ -104,27 +104,27 @@ export function LoginForm({
           <section
             className={cn("neu-card flex flex-col gap-4 rounded-[30px] p-6")}
           >
-            <div className="space-y-2">
+            <div className="space-y-2 ">
               <div className="w-full justify-center items-center flex">
-                <img src="/bflogo.png" alt="logo" className="w-fit mb-10" />
+                <img src="/bflogo.png" alt="logo" className="w-fit md:mb-10" />
               </div>
-              <p className="text-sm uppercase tracking-[0.5em] text-muted-foreground">
+              <p className="text-sm uppercase tracking-[0.5em] text-muted-foreground hidden md:block">
                 Bem Vindo
               </p>
               {/* <h2 className="text-2xl font-semibold">-</h2> */}
               <div
-                className="h-1 w-8 rounded-full my-4"
+                className="h-1 w-8 rounded-full my-4 hidden md:block"
                 style={{
                   background: isDark ? "#8b9dc3" : "#a5b4d4",
                   boxShadow: "var(--shadow-neu-subtle)",
                 }}
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground hidden md:block">
                 Biblioteca de Fótons é um projeto de centralização e catalogação
                 de registros pessoais do criador.
               </p>
             </div>
-            <div className="mt-auto text-[9px] text-muted-foreground">
+            <div className="mt-auto text-[9px] text-muted-foreground hidden md:block">
               © {new Date().getFullYear()} Biblioteca de Fótons. Todos os
               direitos reservados.
             </div>

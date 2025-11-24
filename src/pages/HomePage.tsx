@@ -312,8 +312,8 @@ export function HomePage() {
                 className={cn(
                   " py-2 px-4 rounded-[20px] text-sm font-medium transition hover:cursor-pointer",
                   activeTab === tab.id
-                    ? "neu-card"
-                    : "neu-card-reversed text-gray-400"
+                    ? "neu-card-reversed "
+                    : "neu-card text-gray-400"
                 )}
                 onClick={() => handleTabChange(tab.id)}
               >
