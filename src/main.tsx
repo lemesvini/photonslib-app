@@ -7,24 +7,12 @@ import App from "./App.tsx";
 // Create a client
 const queryClient = new QueryClient();
 
-// Initialize theme before rendering
+// Initialize theme before rendering; default to light unless the user explicitly saved dark
 const initializeTheme = () => {
   const savedTheme = localStorage.getItem("theme");
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const shouldBeDark = savedTheme === "dark";
 
-  let shouldBeDark = false;
-
-  if (savedTheme) {
-    shouldBeDark = savedTheme === "dark";
-  } else {
-    shouldBeDark = prefersDark;
-  }
-
-  if (shouldBeDark) {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
+  document.documentElement.classList.toggle("dark", shouldBeDark);
 };
 
 initializeTheme();

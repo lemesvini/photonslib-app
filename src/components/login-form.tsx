@@ -29,10 +29,7 @@ export function LoginForm({
   useEffect(() => {
     const checkTheme = () => {
       const savedTheme = localStorage.getItem("theme");
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-      const shouldBeDark = savedTheme ? savedTheme === "dark" : prefersDark;
+      const shouldBeDark = savedTheme === "dark";
       applyTheme(shouldBeDark);
     };
 
