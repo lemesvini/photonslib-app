@@ -231,6 +231,15 @@ select:-webkit-autofill:focus {
 
 /* Neumorphism utility classes */
 @layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .neu-raised {
     box-shadow: var(--shadow-neu-raised);
   }
