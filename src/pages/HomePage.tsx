@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient, type PageRecord } from "@/lib/api";
-import { LogOut, Plus, Edit, Trash2, FileText } from "lucide-react";
+import { ArrowLeft, LogOut, Plus, Edit, Trash2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageCard from "@/components/pageCard";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -33,6 +33,7 @@ export function HomePage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPage, setSelectedPage] = useState<PageRecord | null>(null);
+  const [secondaryPage, setSecondaryPage] = useState<PageRecord | null>(null);
   const isMobile = useIsMobile();
 
   const handleLogout = async () => {
@@ -46,6 +47,16 @@ export function HomePage() {
     try {
       const response = await apiClient.getPages({ limit: 50 });
       setPages(response.pages);
+      setSecondaryPage((prev) => {
+        if (!prev) {
+          return null;
+        }
+
+        const existingSecondary = response.pages.find(
+          (page) => page.id === prev.id
+        );
+        return existingSecondary ?? null;
+      });
       setSelectedPage((prev) => {
         if (!response.pages.length) {
           return null;
@@ -113,6 +124,7 @@ export function HomePage() {
   useEffect(() => {
     if (!filteredPages.length) {
       setSelectedPage(null);
+      setSecondaryPage(null);
       return;
     }
 
@@ -123,68 +135,123 @@ export function HomePage() {
 
       return isMobile ? null : filteredPages[0];
     });
+
+    setSecondaryPage((prev) => {
+      if (!prev) {
+        return null;
+      }
+
+      return filteredPages.some((page) => page.id === prev.id) ? prev : null;
+    });
   }, [filteredPages, isMobile]);
 
   const handleSelectPage = useCallback((page: PageRecord) => {
     setSelectedPage(page);
+    setSecondaryPage(null);
   }, []);
 
   const handleClearSelection = useCallback(() => {
     setSelectedPage(null);
+    setSecondaryPage(null);
   }, []);
 
-  const handleEditPage = useCallback(() => {
-    if (selectedPage) {
-      navigate(`/studio/${selectedPage.id}`);
-    }
-  }, [selectedPage, navigate]);
+  const handleEditPage = useCallback(
+    (page: PageRecord) => {
+      navigate(`/studio/${page.id}`);
+    },
+    [navigate]
+  );
 
   const handleCreatePage = useCallback(() => {
     navigate("/studio/new");
   }, [navigate]);
 
-  const handleDeletePage = useCallback(async () => {
-    if (!selectedPage) return;
+  const handleDeletePage = useCallback(
+    async (page: PageRecord) => {
+      const confirmDelete = window.confirm(
+        `Tem certeza que deseja deletar a página "${page.title}"? Esta ação não pode ser desfeita.`
+      );
 
-    const confirmDelete = window.confirm(
-      `Tem certeza que deseja deletar a página "${selectedPage.title}"? Esta ação não pode ser desfeita.`
-    );
+      if (!confirmDelete) return;
 
-    if (!confirmDelete) return;
+      try {
+        await apiClient.deletePage(page.id);
+        setSelectedPage((prev) => (prev?.id === page.id ? null : prev));
+        setSecondaryPage((prev) => (prev?.id === page.id ? null : prev));
+        await fetchPages();
+      } catch (error) {
+        console.error("Failed to delete page:", error);
+        alert("Erro ao deletar página. Tente novamente.");
+      }
+    },
+    [fetchPages]
+  );
 
-    try {
-      await apiClient.deletePage(selectedPage.id);
-      setSelectedPage(null);
-      await fetchPages();
-    } catch (error) {
-      console.error("Failed to delete page:", error);
-      alert("Erro ao deletar página. Tente novamente.");
-    }
-  }, [selectedPage, fetchPages]);
+  const handleOpenPrimarySubpage = useCallback(
+    (pageId: number) => {
+      const targetPage = pages.find((page) => page.id === pageId);
+      if (!targetPage) {
+        return;
+      }
 
-  const selectedPageImage =
-    selectedPage?.image || selectedPage?.thumbnail || null;
+      if (isMobile) {
+        setSecondaryPage(null);
+        setSelectedPage(targetPage);
+        return;
+      }
+
+      setSecondaryPage(targetPage);
+    },
+    [pages, isMobile]
+  );
+
+  const handleOpenSecondarySubpage = useCallback(
+    (pageId: number) => {
+      const targetPage = pages.find((page) => page.id === pageId);
+      if (!targetPage) {
+        return;
+      }
+
+      if (isMobile) {
+        setSecondaryPage(null);
+        setSelectedPage(targetPage);
+        return;
+      }
+
+      if (secondaryPage) {
+        setSelectedPage(secondaryPage);
+      }
+      setSecondaryPage(targetPage);
+    },
+    [pages, isMobile, secondaryPage]
+  );
+
+  const handleBackToListing = useCallback(() => {
+    setSecondaryPage(null);
+  }, []);
+
+  const handleCloseSecondary = useCallback(() => {
+    setSecondaryPage(null);
+  }, []);
 
   // Render markdown content
-  const renderMarkdownContent = (content: string) => {
+  const renderMarkdownContent = (
+    content: string,
+    onSubpageClick: (pageId: number) => void = handleOpenPrimarySubpage
+  ) => {
     const lines = content.split("\n");
 
     return lines.map((line, index) => {
       // Check for subpage reference
       const subPageMatch = line.match(/^>\s*\[\[page:(\d+):(.+?)\]\]/);
       if (subPageMatch) {
-        const pageId = subPageMatch[1];
+        const pageId = Number(subPageMatch[1]);
         const pageTitle = subPageMatch[2];
         return (
           <div
             key={index}
             className="flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all"
-            onClick={() => {
-              const page = pages.find((p) => p.id === parseInt(pageId));
-              if (page) {
-                setSelectedPage(page);
-              }
-            }}
+            onClick={() => onSubpageClick(pageId)}
           >
             <FileText className="w-4 h-4 text-muted-foreground" />
             <span className="font-medium">{pageTitle}</span>
@@ -276,26 +343,37 @@ export function HomePage() {
     });
   };
 
-  const renderReaderContent = () => {
-    if (!selectedPage) {
+  const renderReaderContent = (
+    page: PageRecord | null,
+    options: {
+      onClose?: () => void;
+      onSubpageClick?: (pageId: number) => void;
+    } = {}
+  ) => {
+    if (!page) {
       return null;
     }
+
+    const pageImage = page.image || page.thumbnail || null;
+    const handleClose = options.onClose;
+    const handleSubpageClick =
+      options.onSubpageClick ?? handleOpenPrimarySubpage;
 
     return (
       <div className="relative flex h-full w-full flex-col overflow-hidden md:overflow-auto">
         <div className={cn("flex flex-col")}>
           <header className="mb-4 space-y-1 pr-8">
             <p className="text-xs text-muted-foreground">
-              {formatDate(selectedPage.createdDate)}
+              {formatDate(page.createdDate)}
             </p>
             <h2 className="text-2xl font-semibold leading-tight text-foreground">
-              {selectedPage.title}
+              {page.title}
             </h2>
           </header>
-          {selectedPageImage ? (
+          {pageImage ? (
             <img
-              src={selectedPageImage}
-              alt={`Imagem da página ${selectedPage.title}`}
+              src={pageImage}
+              alt={`Imagem da página ${page.title}`}
               className="h-64 w-full rounded-[24px] object-cover"
             />
           ) : null}
@@ -305,7 +383,7 @@ export function HomePage() {
                 <button
                   type="button"
                   className="hidden md:flex neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center"
-                  onClick={handleEditPage}
+                  onClick={() => handleEditPage(page)}
                   title="Editar página"
                 >
                   <Edit size={16} />
@@ -313,25 +391,27 @@ export function HomePage() {
                 <button
                   type="button"
                   className="hidden md:flex neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center text-destructive"
-                  onClick={handleDeletePage}
+                  onClick={() => handleDeletePage(page)}
                   title="Deletar página"
                 >
                   <Trash2 size={16} />
                 </button>
               </>
             )}
-            <button
-              type="button"
-              className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold"
-              onClick={handleClearSelection}
-            >
-              &times;
-            </button>
+            {handleClose ? (
+              <button
+                type="button"
+                className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold"
+                onClick={handleClose}
+              >
+                &times;
+              </button>
+            ) : null}
           </div>
           <div className="flex-1 overflow-y-auto rounded-[24px] bg-background/80 p-4">
-            {selectedPage.content ? (
+            {page.content ? (
               <div className="text-sm leading-relaxed text-foreground">
-                {renderMarkdownContent(selectedPage.content)}
+                {renderMarkdownContent(page.content, handleSubpageClick)}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -353,6 +433,7 @@ export function HomePage() {
 
   const handleTabChange = (tabId: TabId) => {
     setActiveTab(tabId);
+    setSecondaryPage(null);
   };
 
   const pageListContent = () => {
@@ -398,6 +479,8 @@ export function HomePage() {
     ));
   };
 
+  const showReaderOnly = !isMobile && Boolean(selectedPage && secondaryPage);
+
   if (isMobile && selectedPage) {
     return (
       <main className="flex flex-1 bg-background items-center justify-center p-4">
@@ -407,7 +490,10 @@ export function HomePage() {
             "neu-card-reversed"
           )}
         >
-          {renderReaderContent()}
+          {renderReaderContent(selectedPage, {
+            onClose: handleClearSelection,
+            onSubpageClick: handleOpenPrimarySubpage,
+          })}
         </div>
       </main>
     );
@@ -417,89 +503,147 @@ export function HomePage() {
     <main className="flex h-[100dvh] flex-1 bg-background items-center justify-center p-4 md:p-8">
       <div
         className={cn(
-          "relative w-full flex h-full flex flex-row rounded-[40px] gap-6",
-          "neu-card-reversed"
+          "relative w-full h-full flex rounded-[40px] gap-6",
+          "neu-card-reversed",
+          showReaderOnly ? "flex-col" : "flex-row"
         )}
       >
-        <div className={cn("flex-1 flex flex-col overflow-hidden")}>
-          <div className="flex flex-row w-full gap-4 items-center justify-between md:justify-start p-6">
-            <img
-              src="/bflogo.png"
-              alt="Biblioteca de Fótons Logo"
-              className="h-8"
-            />
-            <form
-              onSubmit={handleSearchSubmit}
-              className={cn(
-                "neu-card",
-                "rounded-[30px] py-2 px-4 flex-1 hidden md:flex items-center gap-3"
-              )}
-            >
-              <input
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground py-2"
-                type="search"
-                placeholder="Buscar fótons..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+        {showReaderOnly ? (
+          <div className="flex flex-1 flex-col gap-6 px-6 py-6">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                className="neu-button rounded-[30px] px-4 py-3 text-sm font-semibold flex items-center gap-2 hover:cursor-pointer"
+                onClick={handleBackToListing}
+              >
+                <ArrowLeft size={16} />
+                <span>Voltar</span>
+              </button>
+              <img
+                src="/bflogo.png"
+                alt="Biblioteca de Fótons Logo"
+                className="h-8"
               />
-            </form>
-            {isAdmin && (
-              <button
-                type="button"
-                className="neu-button hidden md:flex rounded-[30px] bg-transparent px-4 py-3 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
-                onClick={handleCreatePage}
-              >
-                <Plus size={20} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="neu-button rounded-[30px] bg-transparent px-4 py-4 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
-              onClick={handleLogout}
-            >
-              <LogOut color="black" size={20} />
-            </button>
-          </div>
-          <div className="md:hidden p-4 neu-card">
-            <input
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground py-2"
-              type="search"
-              placeholder="Buscar fótons..."
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-row justify-center md:justify-start mt-8 gap-4 px-6">
-            {PAGE_FILTER_TABS.map((tab) => (
-              <button
-                type="button"
-                key={tab.id}
-                className={cn(
-                  " py-2 px-4 rounded-[20px] text-sm font-medium transition hover:cursor-pointer",
-                  activeTab === tab.id
-                    ? "neu-card-reversed "
-                    : "neu-card text-gray-400"
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="neu-button hidden md:flex rounded-[30px] bg-transparent px-4 py-3 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
+                    onClick={handleCreatePage}
+                  >
+                    <Plus size={20} />
+                  </button>
                 )}
-                onClick={() => handleTabChange(tab.id)}
+                <button
+                  type="button"
+                  className="neu-button rounded-[30px] bg-transparent px-4 py-4 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
+                  onClick={handleLogout}
+                >
+                  <LogOut color="black" size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-1 flex-col md:flex-row gap-6 neu-card-reversed p-4 rounded-[30px]">
+              <div className=" rounded-[30px] p-6 flex-1 overflow-hidden">
+                {renderReaderContent(selectedPage, {
+                  onClose: handleClearSelection,
+                  onSubpageClick: handleOpenPrimarySubpage,
+                })}
+              </div>
+              <div className="neu-card-reversed rounded-[20px] p-6 flex-1 overflow-hidden">
+                {renderReaderContent(secondaryPage, {
+                  onClose: handleCloseSecondary,
+                  onSubpageClick: handleOpenSecondarySubpage,
+                })}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className={cn("flex-1 flex flex-col overflow-hidden")}>
+              <div className="flex flex-row w-full gap-4 items-center justify-between md:justify-start p-6">
+                <img
+                  src="/bflogo.png"
+                  alt="Biblioteca de Fótons Logo"
+                  className="h-8"
+                />
+                <form
+                  onSubmit={handleSearchSubmit}
+                  className={cn(
+                    "neu-card",
+                    "rounded-[30px] py-2 px-4 flex-1 hidden md:flex items-center gap-3"
+                  )}
+                >
+                  <input
+                    className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground py-2"
+                    type="search"
+                    placeholder="Buscar fótons..."
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                  />
+                </form>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="neu-button hidden md:flex rounded-[30px] bg-transparent px-4 py-3 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
+                    onClick={handleCreatePage}
+                  >
+                    <Plus size={20} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="neu-button rounded-[30px] bg-transparent px-4 py-4 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
+                  onClick={handleLogout}
+                >
+                  <LogOut color="black" size={20} />
+                </button>
+              </div>
+              <div className="md:hidden p-4 neu-card">
+                <input
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground py-2"
+                  type="search"
+                  placeholder="Buscar fótons..."
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
+              </div>
+              <div className="flex flex-row justify-center md:justify-start mt-8 gap-4 px-6">
+                {PAGE_FILTER_TABS.map((tab) => (
+                  <button
+                    type="button"
+                    key={tab.id}
+                    className={cn(
+                      " py-2 px-4 rounded-[20px] text-sm font-medium transition hover:cursor-pointer",
+                      activeTab === tab.id
+                        ? "neu-card-reversed "
+                        : "neu-card text-gray-400"
+                    )}
+                    onClick={() => handleTabChange(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-8 mb-4 overflow-y-auto flex-1 w-full space-y-4 p-6 scrollbar-hide">
+                {pageListContent()}
+              </div>
+            </div>
+            {selectedPage ? (
+              <div
+                className={cn(
+                  "neu-card-reversed",
+                  "rounded-[30px] p-6 flex-1 hidden md:flex my-6 mr-6 overflow-hidden"
+                )}
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-8 mb-4 overflow-y-auto flex-1 w-full space-y-4 p-6 scrollbar-hide">
-            {pageListContent()}
-          </div>
-        </div>
-        {selectedPage ? (
-          <div
-            className={cn(
-              "neu-card-reversed",
-              "rounded-[30px] p-6 flex-1 hidden md:flex my-6 mr-6 overflow-hidden"
-            )}
-          >
-            {renderReaderContent()}
-          </div>
-        ) : null}
+                {renderReaderContent(selectedPage, {
+                  onClose: handleClearSelection,
+                  onSubpageClick: handleOpenPrimarySubpage,
+                })}
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     </main>
   );
