@@ -304,7 +304,7 @@ export function HomePage() {
               <>
                 <button
                   type="button"
-                  className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center"
+                  className="hidden md:flex neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center"
                   onClick={handleEditPage}
                   title="Editar página"
                 >
@@ -312,7 +312,7 @@ export function HomePage() {
                 </button>
                 <button
                   type="button"
-                  className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center text-destructive"
+                  className="hidden md:flex neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center text-destructive"
                   onClick={handleDeletePage}
                   title="Deletar página"
                 >
@@ -460,7 +460,16 @@ export function HomePage() {
               <LogOut color="black" size={20} />
             </button>
           </div>
-          <div className="flex flex-row justify-start mt-8 gap-4 px-6">
+          <div className="md:hidden p-4 neu-card">
+            <input
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground py-2"
+              type="search"
+              placeholder="Buscar fótons..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-row justify-center md:justify-start mt-8 gap-4 px-6">
             {PAGE_FILTER_TABS.map((tab) => (
               <button
                 type="button"

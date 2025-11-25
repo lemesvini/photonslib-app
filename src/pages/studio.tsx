@@ -12,6 +12,10 @@ import {
   List,
   Type,
   Minus,
+  Settings,
+  X,
+  Image as ImageIcon,
+  Link,
 } from "lucide-react";
 
 interface MenuPosition {
@@ -136,8 +140,16 @@ export default function Studio() {
   const editorRef = useRef<HTMLDivElement>(null);
   const contentEditableRef = useRef<HTMLDivElement>(null);
 
+  const [tags, setTags] = useState<{ name: string; color?: string }[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [showMetadata, setShowMetadata] = useState(false);
+
   const debouncedTitle = useDebounce(title, 1000);
   const debouncedContent = useDebounce(content, 1000);
+  const debouncedImageUrl = useDebounce(imageUrl, 1000);
+  const debouncedThumbnailUrl = useDebounce(thumbnailUrl, 1000);
 
   // Load page data
   useEffect(() => {
@@ -148,6 +160,9 @@ export default function Studio() {
         .then(async (data) => {
           setPage(data);
           setTitle(data.title);
+          setTags(data.tags.map((t) => ({ name: t.name, color: t.color })));
+          setImageUrl(data.image || "");
+          setThumbnailUrl(data.thumbnail || "");
 
           // Parse content and fetch referenced page titles
           let processedContent = data.content || "";
@@ -251,13 +266,26 @@ export default function Studio() {
       (id === "new" && (debouncedTitle || debouncedContent)) ||
       (id !== "new" &&
         page &&
-        (debouncedTitle !== page.title || debouncedContent !== page.content));
+        (debouncedTitle !== page.title ||
+          debouncedContent !== page.content ||
+          debouncedImageUrl !== (page.image || "") ||
+          debouncedThumbnailUrl !== (page.thumbnail || "") ||
+          JSON.stringify(tags) !==
+            JSON.stringify(
+              page.tags.map((t) => ({ name: t.name, color: t.color }))
+            )));
 
     if (shouldSave) {
       handleAutoSave();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedTitle, debouncedContent]);
+  }, [
+    debouncedTitle,
+    debouncedContent,
+    debouncedImageUrl,
+    debouncedThumbnailUrl,
+    tags,
+  ]);
 
   const handleAutoSave = async () => {
     if (!title.trim()) return;
@@ -268,6 +296,9 @@ export default function Studio() {
         const newPage = await apiClient.createPage({
           title,
           content: content || null,
+          image: imageUrl || null,
+          thumbnail: thumbnailUrl || null,
+          tags,
           createdDate: new Date().toISOString(),
         });
         setPage(newPage);
@@ -277,6 +308,9 @@ export default function Studio() {
         await apiClient.updatePage(page.id, {
           title,
           content: content || null,
+          image: imageUrl || null,
+          thumbnail: thumbnailUrl || null,
+          tags,
         });
         // Don't update page state to avoid re-render
         setLastSaved(new Date());
@@ -558,6 +592,17 @@ export default function Studio() {
     }
   };
 
+  const handleAddTag = () => {
+    if (newTag.trim() && !tags.some((t) => t.name === newTag.trim())) {
+      setTags([...tags, { name: newTag.trim(), color: "#gray" }]);
+      setNewTag("");
+    }
+  };
+
+  const handleRemoveTag = (tagName: string) => {
+    setTags(tags.filter((t) => t.name !== tagName));
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-[100dvh] w-full items-center justify-center">
@@ -596,8 +641,89 @@ export default function Studio() {
                 {!isSaving && lastSaved && (
                   <span>Saved {lastSaved.toLocaleTimeString()}</span>
                 )}
+                <button
+                  onClick={() => setShowMetadata(!showMetadata)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showMetadata
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted"
+                  }`}
+                  title="Metadata"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
               </div>
             </div>
+
+            {showMetadata && (
+              <div className="mb-4 p-4 neu-card-reversed rounded-xl space-y-4 animate-in slide-in-from-top-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4" /> Image URL
+                    </label>
+                    <input
+                      type="text"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4" /> Thumbnail URL
+                    </label>
+                    <input
+                      type="text"
+                      value={thumbnailUrl}
+                      onChange={(e) => setThumbnailUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Link className="w-4 h-4" /> Tags
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag.name}
+                        className="px-2 py-1 rounded-full neu-card text-sm flex items-center gap-1"
+                        style={{ color: tag.color }}
+                      >
+                        {tag.name}
+                        <button
+                          onClick={() => handleRemoveTag(tag.name)}
+                          className="hover:text-destructive"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+                      placeholder="Add a tag..."
+                      className="flex-1 p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                    />
+                    <button
+                      onClick={handleAddTag}
+                      className="px-4 py-2 rounded-lg neu-button text-sm font-medium hover:scale-105 transition-transform"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>
