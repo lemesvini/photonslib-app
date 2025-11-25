@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient, type PageRecord } from "@/lib/api";
-import { LogOut } from "lucide-react";
+import { LogOut, Plus, Edit, Trash2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageCard from "@/components/pageCard";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const PAGE_FILTER_TABS = [
   { id: "library", label: "Biblioteca", filter: (_page: PageRecord) => true },
@@ -25,6 +26,7 @@ type TabId = (typeof PAGE_FILTER_TABS)[number]["id"];
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { isAdmin } = useUserRole();
   const [activeTab, setActiveTab] = useState<TabId>(PAGE_FILTER_TABS[0].id);
   const [pages, setPages] = useState<PageRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,8 +133,148 @@ export function HomePage() {
     setSelectedPage(null);
   }, []);
 
+  const handleEditPage = useCallback(() => {
+    if (selectedPage) {
+      navigate(`/studio/${selectedPage.id}`);
+    }
+  }, [selectedPage, navigate]);
+
+  const handleCreatePage = useCallback(() => {
+    navigate("/studio/new");
+  }, [navigate]);
+
+  const handleDeletePage = useCallback(async () => {
+    if (!selectedPage) return;
+
+    const confirmDelete = window.confirm(
+      `Tem certeza que deseja deletar a página "${selectedPage.title}"? Esta ação não pode ser desfeita.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await apiClient.deletePage(selectedPage.id);
+      setSelectedPage(null);
+      await fetchPages();
+    } catch (error) {
+      console.error("Failed to delete page:", error);
+      alert("Erro ao deletar página. Tente novamente.");
+    }
+  }, [selectedPage, fetchPages]);
+
   const selectedPageImage =
     selectedPage?.image || selectedPage?.thumbnail || null;
+
+  // Render markdown content
+  const renderMarkdownContent = (content: string) => {
+    const lines = content.split("\n");
+
+    return lines.map((line, index) => {
+      // Check for subpage reference
+      const subPageMatch = line.match(/^>\s*\[\[page:(\d+):(.+?)\]\]/);
+      if (subPageMatch) {
+        const pageId = subPageMatch[1];
+        const pageTitle = subPageMatch[2];
+        return (
+          <div
+            key={index}
+            className="flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all"
+            onClick={() => {
+              const page = pages.find((p) => p.id === parseInt(pageId));
+              if (page) {
+                setSelectedPage(page);
+              }
+            }}
+          >
+            <FileText className="w-4 h-4 text-muted-foreground" />
+            <span className="font-medium">{pageTitle}</span>
+          </div>
+        );
+      }
+
+      // Headers
+      if (line.startsWith("# ")) {
+        return (
+          <h1 key={index} className="text-2xl font-bold mt-6 mb-3">
+            {line.slice(2)}
+          </h1>
+        );
+      }
+      if (line.startsWith("## ")) {
+        return (
+          <h2 key={index} className="text-xl font-bold mt-5 mb-2">
+            {line.slice(3)}
+          </h2>
+        );
+      }
+      if (line.startsWith("### ")) {
+        return (
+          <h3 key={index} className="text-lg font-semibold mt-4 mb-2">
+            {line.slice(4)}
+          </h3>
+        );
+      }
+
+      // Lists
+      if (line.startsWith("- ") || line.startsWith("* ")) {
+        return (
+          <li key={index} className="ml-4 mb-1">
+            {line.slice(2)}
+          </li>
+        );
+      }
+
+      // Bold text **text**
+      const boldRegex = /\*\*(.+?)\*\*/g;
+      const italicRegex = /\*(.+?)\*/g;
+
+      const hasBold = boldRegex.test(line);
+      const hasItalic = italicRegex.test(line);
+
+      if (hasBold || hasItalic) {
+        const parts = [];
+        let lastIndex = 0;
+        let match;
+
+        const combinedRegex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+        while ((match = combinedRegex.exec(line)) !== null) {
+          if (match.index > lastIndex) {
+            parts.push(line.slice(lastIndex, match.index));
+          }
+
+          if (match[0].startsWith("**")) {
+            parts.push(<strong key={match.index}>{match[2]}</strong>);
+          } else {
+            parts.push(<em key={match.index}>{match[3]}</em>);
+          }
+
+          lastIndex = match.index + match[0].length;
+        }
+
+        if (lastIndex < line.length) {
+          parts.push(line.slice(lastIndex));
+        }
+
+        return (
+          <p key={index} className="mb-2">
+            {parts}
+          </p>
+        );
+      }
+
+      // Empty lines
+      if (line.trim() === "") {
+        return <br key={index} />;
+      }
+
+      // Regular paragraphs
+      return (
+        <p key={index} className="mb-2">
+          {line}
+        </p>
+      );
+    });
+  };
 
   const renderReaderContent = () => {
     if (!selectedPage) {
@@ -141,15 +283,6 @@ export function HomePage() {
 
     return (
       <div className="relative flex h-full w-full flex-col overflow-hidden md:overflow-auto">
-        {/* {showBackButton ? (
-          <button
-            type="button"
-            className="neu-button absolute left-4 top-4 rounded-[20px] px-4 py-2 text-xs font-semibold"
-            onClick={handleClearSelection}
-          >
-            Voltar
-          </button>
-        ) : null} */}
         <div className={cn("flex flex-col")}>
           <header className="mb-4 space-y-1 pr-8">
             <p className="text-xs text-muted-foreground">
@@ -166,18 +299,40 @@ export function HomePage() {
               className="h-64 w-full rounded-[24px] object-cover"
             />
           ) : null}
-          <button
-            type="button"
-            className="neu-button absolute right-0 top-0 rounded-[20px] h-8 w-8 text-lg font-semibold m-2"
-            onClick={handleClearSelection}
-          >
-            &times;
-          </button>
-          <div className=" flex-1 overflow-y-auto rounded-[24px] bg-background/80 p-4">
+          <div className="absolute right-0 top-0 flex gap-2 m-2">
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center"
+                  onClick={handleEditPage}
+                  title="Editar página"
+                >
+                  <Edit size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center text-destructive"
+                  onClick={handleDeletePage}
+                  title="Deletar página"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold"
+              onClick={handleClearSelection}
+            >
+              &times;
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto rounded-[24px] bg-background/80 p-4">
             {selectedPage.content ? (
-              <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
-                {selectedPage.content}
-              </p>
+              <div className="text-sm leading-relaxed text-foreground">
+                {renderMarkdownContent(selectedPage.content)}
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Sem conteúdo disponível.
@@ -266,7 +421,7 @@ export function HomePage() {
           "neu-card-reversed"
         )}
       >
-        <div className={cn(" flex-1 flex-col")}>
+        <div className={cn("flex-1 flex flex-col overflow-hidden")}>
           <div className="flex flex-row w-full gap-4 items-center justify-between md:justify-start p-6">
             <img
               src="/bflogo.png"
@@ -288,14 +443,15 @@ export function HomePage() {
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
             </form>
-            {/* <button
-              type="button"
-              className="neu-button hidden md:flex rounded-[30px] bg-transparent px-4 py-3 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
-              onClick={handleCreatePage}
-              disabled={isCreating}
-            >
-              {isCreating ? "Criando..." : "Nova página"}
-            </button> */}
+            {isAdmin && (
+              <button
+                type="button"
+                className="neu-button hidden md:flex rounded-[30px] bg-transparent px-4 py-3 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
+                onClick={handleCreatePage}
+              >
+                <Plus size={20} />
+              </button>
+            )}
             <button
               type="button"
               className="neu-button rounded-[30px] bg-transparent px-4 py-4 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60 hover:cursor-pointer"
@@ -321,7 +477,7 @@ export function HomePage() {
               </button>
             ))}
           </div>
-          <div className="mt-8 mb-4 overflow-y-auto w-full space-y-4 p-6">
+          <div className="mt-8 mb-4 overflow-y-auto flex-1 w-full space-y-4 p-6 scrollbar-hide">
             {pageListContent()}
           </div>
         </div>

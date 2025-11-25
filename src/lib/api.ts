@@ -189,6 +189,26 @@ class ApiClient {
       body: JSON.stringify(payload),
     });
   }
+
+  async getPageById(id: number): Promise<PageRecord> {
+    return this.request<PageRecord>(`api/pages/${id}`);
+  }
+
+  async updatePage(
+    id: number,
+    payload: Partial<CreatePageInput>
+  ): Promise<PageRecord> {
+    return this.request<PageRecord>(`api/pages/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deletePage(id: number): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`api/pages/${id}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

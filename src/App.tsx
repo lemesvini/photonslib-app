@@ -8,6 +8,7 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import "./App.css";
+import Studio from "./pages/studio";
 
 function App() {
   return (
@@ -19,6 +20,14 @@ function App() {
           element={
             <ProtectedRoute>
               <HomePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/studio/:id"
+          element={
+            <ProtectedRoute>
+              <Studio />
             </ProtectedRoute>
           }
         />
