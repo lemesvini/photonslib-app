@@ -73,7 +73,7 @@ const MENU_OPTIONS: MenuOption[] = [
 
 // Render markdown content as HTML for contentEditable
 const renderContentAsHTML = (text: string) => {
-  if (!text) return "<div><br></div>";
+  if (!text) return "";
 
   const lines = text.split("\n");
   return lines
@@ -83,43 +83,38 @@ const renderContentAsHTML = (text: string) => {
       if (subPageMatch) {
         const pageId = subPageMatch[1];
         const pageTitle = subPageMatch[2];
-        return `<div class="block-wrapper" data-type="page" data-page-id="${pageId}" data-page-title="${pageTitle}"><div class="flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all" contenteditable="false">
+        return `<div class="flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all" data-page-id="${pageId}" data-page-title="${pageTitle}" contenteditable="false">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
           <span class="font-medium">${pageTitle}</span>
-        </div></div>`;
+        </div>`;
       }
 
       // Headings
       if (line.startsWith("# ")) {
         const text = line.slice(2);
-        return `<h1 class="text-3xl font-bold my-4 block-wrapper" data-type="h1">${text}</h1>`;
+        return `<h1 class="text-3xl font-bold my-4" data-md="# ">${text}</h1>`;
       }
       if (line.startsWith("## ")) {
         const text = line.slice(3);
-        return `<h2 class="text-2xl font-bold my-3 block-wrapper" data-type="h2">${text}</h2>`;
+        return `<h2 class="text-2xl font-bold my-3" data-md="## ">${text}</h2>`;
       }
       if (line.startsWith("### ")) {
         const text = line.slice(4);
-        return `<h3 class="text-xl font-semibold my-2 block-wrapper" data-type="h3">${text}</h3>`;
+        return `<h3 class="text-xl font-semibold my-2" data-md="### ">${text}</h3>`;
       }
 
       // Horizontal rule
       if (line.trim() === "---") {
-        return `<div class="block-wrapper" data-type="hr"><div class="border-t border-border my-4" contenteditable="false">&nbsp;</div></div>`;
+        return `<div class="border-t border-border my-4" data-md="---" contenteditable="false">&nbsp;</div>`;
       }
 
       // List items
       if (line.startsWith("- ") || line.startsWith("* ")) {
         const text = line.slice(2);
-        return `<div class="flex items-start gap-2 my-1 block-wrapper" data-type="list"><span class="text-muted-foreground mt-0.5 select-none" style="user-select: none;">•</span><span class="flex-1">${text}</span></div>`;
+        return `<div class="flex items-start gap-2 my-1" data-md="- "><span class="text-muted-foreground mt-0.5" contenteditable="false">•</span><span class="flex-1">${text}</span></div>`;
       }
 
-      // Regular paragraph
-      if (line.trim()) {
-        return `<div class="block-wrapper" data-type="text">${line}</div>`;
-      }
-
-      return "<div class='block-wrapper' data-type='text'><br></div>";
+      return line || "<br>";
     })
     .join("");
 };
@@ -299,66 +294,47 @@ export default function Studio() {
 
     const lines: string[] = [];
 
-    // Get all block wrappers
-    const blocks =
-      contentEditableRef.current.querySelectorAll(".block-wrapper");
+    const walkNodes = (node: Node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as HTMLElement;
 
-    blocks.forEach((block) => {
-      const element = block as HTMLElement;
-      const blockType = element.getAttribute("data-type");
-
-      switch (blockType) {
-        case "page": {
+        if (element.hasAttribute("data-page-id")) {
           const pageId = element.getAttribute("data-page-id");
           const pageTitle = element.getAttribute("data-page-title");
           lines.push(`> [[page:${pageId}:${pageTitle}]]`);
-          break;
+          return;
         }
-        case "h1": {
+
+        // Check for markdown data attribute
+        const mdPrefix = element.getAttribute("data-md");
+        if (mdPrefix) {
           const text = element.textContent?.trim() || "";
-          if (text) lines.push(`# ${text}`);
-          break;
+          if (text) {
+            lines.push(`${mdPrefix}${text}`);
+          } else if (mdPrefix === "---") {
+            lines.push("---");
+          }
+          return;
         }
-        case "h2": {
-          const text = element.textContent?.trim() || "";
-          if (text) lines.push(`## ${text}`);
-          break;
+
+        if (element.tagName === "BR") {
+          lines.push("");
+          return;
         }
-        case "h3": {
-          const text = element.textContent?.trim() || "";
-          if (text) lines.push(`### ${text}`);
-          break;
-        }
-        case "hr": {
-          lines.push("---");
-          break;
-        }
-        case "list": {
-          // Get text content excluding the bullet
-          const textContent = Array.from(element.childNodes)
-            .filter((child) => {
-              if (child.nodeType === Node.ELEMENT_NODE) {
-                const el = child as HTMLElement;
-                return !el.classList.contains("select-none");
-              }
-              return child.nodeType === Node.TEXT_NODE;
-            })
-            .map((child) => child.textContent)
-            .join("")
-            .trim();
-          if (textContent) lines.push(`- ${textContent}`);
-          break;
-        }
-        case "text":
-        default: {
-          const text = element.textContent?.trim() || "";
+
+        // Recursively process children
+        element.childNodes.forEach(walkNodes);
+      } else if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || "";
+        if (text.trim() || text.includes("\n")) {
           lines.push(text);
-          break;
         }
       }
-    });
+    };
 
-    // Clean up and join
+    contentEditableRef.current.childNodes.forEach(walkNodes);
+
+    // Clean up empty lines at start/end and join
     const cleanedContent = lines.join("\n").trim();
     setContent(cleanedContent);
   };
@@ -429,14 +405,13 @@ export default function Studio() {
 
     // Create heading element
     const heading = document.createElement(`h${level}`);
-    heading.className = `${
+    heading.className =
       level === 1
         ? "text-3xl font-bold my-4"
         : level === 2
         ? "text-2xl font-bold my-3"
-        : "text-xl font-semibold my-2"
-    } block-wrapper`;
-    heading.setAttribute("data-type", `h${level}`);
+        : "text-xl font-semibold my-2";
+    heading.setAttribute("data-md", `${"#".repeat(level)} `);
 
     // Move current text to heading
     if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
@@ -465,13 +440,13 @@ export default function Studio() {
 
     // Create list item
     const listItem = document.createElement("div");
-    listItem.className = "flex items-start gap-2 my-1 block-wrapper";
-    listItem.setAttribute("data-type", "list");
+    listItem.className = "flex items-start gap-2 my-1";
+    listItem.setAttribute("data-md", "- ");
 
     const bullet = document.createElement("span");
     bullet.textContent = "•";
-    bullet.className = "text-muted-foreground mt-0.5 select-none";
-    bullet.style.userSelect = "none";
+    bullet.className = "text-muted-foreground mt-0.5";
+    bullet.contentEditable = "false";
 
     const content = document.createElement("span");
     content.className = "flex-1";
@@ -502,31 +477,23 @@ export default function Studio() {
 
     const range = selection.getRangeAt(0);
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "block-wrapper";
-    wrapper.setAttribute("data-type", "hr");
-
     const hr = document.createElement("div");
     hr.className = "border-t border-border my-4";
+    hr.setAttribute("data-md", "---");
     hr.contentEditable = "false";
     hr.innerHTML = "&nbsp;";
 
-    wrapper.appendChild(hr);
-    range.insertNode(wrapper);
+    range.insertNode(hr);
 
-    // Add new line after
-    const newLine = document.createElement("div");
-    newLine.className = "block-wrapper";
-    newLine.setAttribute("data-type", "text");
-    newLine.innerHTML = "<br>";
-    wrapper.after(newLine);
+    // Add line break after
+    const br = document.createElement("br");
+    hr.after(br);
 
-    // Move cursor to new line
-    const newRange = document.createRange();
-    newRange.selectNodeContents(newLine);
-    newRange.collapse(true);
+    // Move cursor after
+    range.setStartAfter(br);
+    range.collapse(true);
     selection.removeAllRanges();
-    selection.addRange(newRange);
+    selection.addRange(range);
   };
 
   // Insert subpage reference
@@ -556,17 +523,12 @@ export default function Studio() {
           }
         }
 
-        // Create wrapper with data attributes
-        const wrapper = document.createElement("div");
-        wrapper.className = "block-wrapper";
-        wrapper.setAttribute("data-type", "page");
-        wrapper.setAttribute("data-page-id", newSubPage.id.toString());
-        wrapper.setAttribute("data-page-title", newSubPage.title);
-
         // Create and insert the subpage element
         const subPageElement = document.createElement("div");
         subPageElement.className =
           "flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all";
+        subPageElement.setAttribute("data-page-id", newSubPage.id.toString());
+        subPageElement.setAttribute("data-page-title", newSubPage.title);
         subPageElement.contentEditable = "false";
 
         subPageElement.innerHTML = `
@@ -576,22 +538,17 @@ export default function Studio() {
 
         subPageElement.onclick = () => navigate(`/studio/${newSubPage.id}`);
 
-        wrapper.appendChild(subPageElement);
-        range.insertNode(wrapper);
+        range.insertNode(subPageElement);
 
-        // Add a new line after
-        const newLine = document.createElement("div");
-        newLine.className = "block-wrapper";
-        newLine.setAttribute("data-type", "text");
-        newLine.innerHTML = "<br>";
-        wrapper.after(newLine);
+        // Add a line break after
+        const br = document.createElement("br");
+        subPageElement.after(br);
 
-        // Move cursor to new line
-        const newRange = document.createRange();
-        newRange.selectNodeContents(newLine);
-        newRange.collapse(true);
+        // Move cursor after the inserted element
+        range.setStartAfter(br);
+        range.collapse(true);
         selection.removeAllRanges();
-        selection.addRange(newRange);
+        selection.addRange(range);
 
         // Update content immediately
         updateContentFromEditor();
