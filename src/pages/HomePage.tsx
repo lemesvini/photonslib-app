@@ -359,7 +359,9 @@ export function HomePage() {
     content: string,
     onSubpageClick: (pageId: number) => void = handleOpenPrimarySubpage
   ) => {
-    const lines = content.split("\n");
+    // Remove surrounding quotes if present (in case content was double-encoded)
+    const cleanContent = content.replace(/^"(.*)"$/, '$1');
+    const lines = cleanContent.split("\n");
 
     return lines.map((line, index) => {
       // Check for subpage reference

@@ -207,12 +207,6 @@ export default function Studio() {
           }
 
           setContent(processedContent);
-          if (contentEditableRef.current) {
-            contentEditableRef.current.innerHTML =
-              renderContentAsHTML(processedContent);
-            // Add click handlers to subpage elements
-            attachSubpageClickHandlers();
-          }
         })
         .catch((error) => {
           console.error("Failed to load page:", error);
@@ -220,6 +214,17 @@ export default function Studio() {
         .finally(() => setIsLoading(false));
     }
   }, [id]);
+
+  // Update contentEditable innerHTML when content changes
+  useEffect(() => {
+    if (contentEditableRef.current && content) {
+      contentEditableRef.current.innerHTML = renderContentAsHTML(content);
+      // Add click handlers to subpage elements after a small delay to ensure DOM is ready
+      setTimeout(() => {
+        attachSubpageClickHandlers();
+      }, 0);
+    }
+  }, [content]);
 
   // Attach click handlers to subpage elements
   const attachSubpageClickHandlers = () => {
