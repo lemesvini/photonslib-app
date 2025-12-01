@@ -174,9 +174,37 @@ export function HomePage() {
       return haystack.includes(query);
     });
 
-    // Sort pages with "callout" tag first when in collections tab
+    // Sort all pages by date
+    const sorted = filtered.sort((a, b) => {
+      // Compare year (descending)
+      const yearA = a.year ?? 0;
+      const yearB = b.year ?? 0;
+      if (yearA !== yearB) return yearB - yearA;
+
+      // Compare month (descending)
+      const monthA = a.month ?? 0;
+      const monthB = b.month ?? 0;
+      if (monthA !== monthB) return monthB - monthA;
+
+      // Compare day (descending)
+      const dayA = a.day ?? 0;
+      const dayB = b.day ?? 0;
+      if (dayA !== dayB) return dayB - dayA;
+
+      // Compare hour (descending)
+      const hourA = a.hour ?? 0;
+      const hourB = b.hour ?? 0;
+      if (hourA !== hourB) return hourB - hourA;
+
+      // Compare minute (descending)
+      const minuteA = a.minute ?? 0;
+      const minuteB = b.minute ?? 0;
+      return minuteB - minuteA;
+    });
+
+    // For collections tab, move "callout" pages to the top
     if (activeTab === "collections") {
-      return filtered.sort((a, b) => {
+      return sorted.sort((a, b) => {
         const aHasCallout = a.tags.some((tag) => tag.name === "callout");
         const bHasCallout = b.tags.some((tag) => tag.name === "callout");
 
@@ -186,7 +214,7 @@ export function HomePage() {
       });
     }
 
-    return filtered;
+    return sorted;
   }, [pages, searchTerm, activeTab]);
 
   useEffect(() => {
