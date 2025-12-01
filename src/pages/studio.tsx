@@ -75,54 +75,6 @@ const MENU_OPTIONS: MenuOption[] = [
   },
 ];
 
-// Render markdown content as HTML for contentEditable
-const renderContentAsHTML = (text: string) => {
-  if (!text) return "";
-
-  const lines = text.split("\n");
-  return lines
-    .map((line) => {
-      const subPageMatch = line.match(/^>\s*\[\[page:(\d+):(.+?)\]\]/);
-
-      if (subPageMatch) {
-        const pageId = subPageMatch[1];
-        const pageTitle = subPageMatch[2];
-        return `<div class="flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all" data-page-id="${pageId}" data-page-title="${pageTitle}" contenteditable="false">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span class="font-medium">${pageTitle}</span>
-        </div>`;
-      }
-
-      // Headings
-      if (line.startsWith("# ")) {
-        const text = line.slice(2);
-        return `<h1 class="text-3xl font-bold my-4" data-md="# ">${text}</h1>`;
-      }
-      if (line.startsWith("## ")) {
-        const text = line.slice(3);
-        return `<h2 class="text-2xl font-bold my-3" data-md="## ">${text}</h2>`;
-      }
-      if (line.startsWith("### ")) {
-        const text = line.slice(4);
-        return `<h3 class="text-xl font-semibold my-2" data-md="### ">${text}</h3>`;
-      }
-
-      // Horizontal rule
-      if (line.trim() === "---") {
-        return `<div class="border-t border-border my-4" data-md="---" contenteditable="false">&nbsp;</div>`;
-      }
-
-      // List items
-      if (line.startsWith("- ") || line.startsWith("* ")) {
-        const text = line.slice(2);
-        return `<div class="flex items-start gap-2 my-1" data-md="- "><span class="text-muted-foreground mt-0.5" contenteditable="false">•</span><span class="flex-1">${text}</span></div>`;
-      }
-
-      return line || "<br>";
-    })
-    .join("");
-};
-
 export default function Studio() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -219,66 +171,36 @@ export default function Studio() {
     }
   }, [id]);
 
-  // Update contentEditable innerHTML when content changes
-  useEffect(() => {
-    if (contentEditableRef.current && content) {
-      contentEditableRef.current.innerHTML = renderContentAsHTML(content);
-      // Add click handlers to subpage elements after a small delay to ensure DOM is ready
-      setTimeout(() => {
-        attachSubpageClickHandlers();
-      }, 0);
-    }
-  }, [content]);
-
-  // Attach click handlers to subpage elements
-  const attachSubpageClickHandlers = () => {
-    if (!contentEditableRef.current) return;
-
-    const subpageElements =
-      contentEditableRef.current.querySelectorAll("[data-page-id]");
-    subpageElements.forEach((element) => {
-      const pageId = element.getAttribute("data-page-id");
-      if (pageId) {
-        element.addEventListener("click", () => navigate(`/studio/${pageId}`));
-      }
-    });
-  };
-
-  // Handle keyboard input in contentEditable
-  const handleInput = () => {
-    if (!contentEditableRef.current) return;
-
-    updateContentFromEditor();
-
-    // Check for "/" trigger
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const textBeforeCursor =
-        range.startContainer.textContent?.slice(0, range.startOffset) || "";
-
-      if (textBeforeCursor.endsWith("/")) {
-        const rect = range.getBoundingClientRect();
-        const editorRect = editorRef.current?.getBoundingClientRect();
-
-        if (editorRect) {
-          setMenuPosition({
-            top: rect.bottom - editorRect.top + 5,
-            left: rect.left - editorRect.left,
-          });
-          setShowMenu(true);
-        }
-      } else if (showMenu) {
-        setShowMenu(false);
-      }
-    }
-  };
-
   // Handle key down for menu navigation
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showMenu && e.key === "Escape") {
       setShowMenu(false);
       e.preventDefault();
+    }
+  };
+
+  // Handle content change
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    setContent(newContent);
+
+    // Check for "/" trigger at cursor position
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = newContent.slice(0, cursorPosition);
+
+    if (textBeforeCursor.endsWith("/")) {
+      // Calculate menu position based on textarea cursor
+      const editorRect = editorRef.current?.getBoundingClientRect();
+
+      if (editorRect) {
+        setMenuPosition({
+          top: 100, // Fixed position for textarea
+          left: 50,
+        });
+        setShowMenu(true);
+      }
+    } else if (showMenu) {
+      setShowMenu(false);
     }
   };
 
@@ -370,212 +292,79 @@ export default function Studio() {
     }
   };
 
-  // Update content state from contentEditable
-  const updateContentFromEditor = () => {
-    if (!contentEditableRef.current) return;
-
-    const lines: string[] = [];
-
-    const walkNodes = (node: Node) => {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-
-        if (element.hasAttribute("data-page-id")) {
-          const pageId = element.getAttribute("data-page-id");
-          const pageTitle = element.getAttribute("data-page-title");
-          lines.push(`> [[page:${pageId}:${pageTitle}]]`);
-          return;
-        }
-
-        // Check for markdown data attribute
-        const mdPrefix = element.getAttribute("data-md");
-        if (mdPrefix) {
-          const text = element.textContent?.trim() || "";
-          if (text) {
-            lines.push(`${mdPrefix}${text}`);
-          } else if (mdPrefix === "---") {
-            lines.push("---");
-          }
-          return;
-        }
-
-        if (element.tagName === "BR") {
-          lines.push("");
-          return;
-        }
-
-        // Recursively process children
-        element.childNodes.forEach(walkNodes);
-      } else if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || "";
-        if (text.trim() || text.includes("\n")) {
-          lines.push(text);
-        }
-      }
-    };
-
-    contentEditableRef.current.childNodes.forEach(walkNodes);
-
-    // Clean up empty lines at start/end and join
-    const cleanedContent = lines.join("\n").trim();
-    setContent(cleanedContent);
-  };
-
   // Insert markdown element based on action
   const handleMenuAction = async (action: string) => {
     setShowMenu(false);
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-
-    const range = selection.getRangeAt(0);
-
-    // Remove the "/" character
-    if (range.startContainer.nodeType === Node.TEXT_NODE) {
-      const textNode = range.startContainer as Text;
-      const text = textNode.textContent || "";
-      const slashIndex = text.lastIndexOf("/", range.startOffset);
-      if (slashIndex !== -1) {
-        textNode.textContent =
-          text.slice(0, slashIndex) + text.slice(range.startOffset);
-        range.setStart(textNode, slashIndex);
-        range.collapse(true);
-      }
-    }
 
     switch (action) {
       case "subpage":
         await insertSubPageRef();
         break;
       case "h1":
-        applyHeadingStyle(1);
+        insertTextAtCursor("# ");
         break;
       case "h2":
-        applyHeadingStyle(2);
+        insertTextAtCursor("## ");
         break;
       case "h3":
-        applyHeadingStyle(3);
+        insertTextAtCursor("### ");
         break;
       case "list":
-        applyListStyle();
+        insertTextAtCursor("- ");
         break;
       case "hr":
-        insertHorizontalRule();
+        insertTextAtCursor("---\n");
         break;
       case "text":
-        // Just remove the slash, normal text
+        // Just remove the slash
+        if (contentEditableRef.current) {
+          const textarea =
+            contentEditableRef.current as unknown as HTMLTextAreaElement;
+          const start = textarea.selectionStart;
+          const beforeCursor = content.slice(0, start);
+          const slashIndex = beforeCursor.lastIndexOf("/");
+          if (slashIndex !== -1) {
+            const newContent =
+              content.slice(0, slashIndex) + content.slice(start);
+            setContent(newContent);
+            setTimeout(() => {
+              textarea.selectionStart = textarea.selectionEnd = slashIndex;
+              textarea.focus();
+            }, 0);
+          }
+        }
         break;
     }
-
-    updateContentFromEditor();
   };
 
-  // Apply heading style to current line
-  const applyHeadingStyle = (level: number) => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+  // Insert text at cursor position in textarea
+  const insertTextAtCursor = (text: string) => {
+    if (!contentEditableRef.current) return;
 
-    // Get the current line/block element
-    let currentNode = selection.getRangeAt(0).startContainer;
-    if (currentNode.nodeType === Node.TEXT_NODE) {
-      currentNode = currentNode.parentNode as Node;
-    }
+    const textarea =
+      contentEditableRef.current as unknown as HTMLTextAreaElement;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentContent = content;
 
-    // Get or create a text node at cursor
-    const range = selection.getRangeAt(0);
-    const textNode = range.startContainer;
+    // Find and remove the "/" before cursor
+    const beforeCursor = currentContent.slice(0, start);
+    const slashIndex = beforeCursor.lastIndexOf("/");
 
-    // Create heading element
-    const heading = document.createElement(`h${level}`);
-    heading.className =
-      level === 1
-        ? "text-3xl font-bold my-4"
-        : level === 2
-        ? "text-2xl font-bold my-3"
-        : "text-xl font-semibold my-2";
-    heading.setAttribute("data-md", `${"#".repeat(level)} `);
+    const newContent =
+      slashIndex !== -1
+        ? currentContent.slice(0, slashIndex) + text + currentContent.slice(end)
+        : currentContent.slice(0, start) + text + currentContent.slice(end);
 
-    // Move current text to heading
-    if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-      heading.textContent = textNode.textContent;
-      textNode.parentNode?.replaceChild(heading, textNode);
-    } else {
-      heading.textContent = "";
-      range.insertNode(heading);
-    }
+    setContent(newContent);
 
-    // Place cursor inside heading
-    const newRange = document.createRange();
-    newRange.selectNodeContents(heading);
-    newRange.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-  };
-
-  // Apply list style to current line
-  const applyListStyle = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-
-    const range = selection.getRangeAt(0);
-    const textNode = range.startContainer;
-
-    // Create list item
-    const listItem = document.createElement("div");
-    listItem.className = "flex items-start gap-2 my-1";
-    listItem.setAttribute("data-md", "- ");
-
-    const bullet = document.createElement("span");
-    bullet.textContent = "•";
-    bullet.className = "text-muted-foreground mt-0.5";
-    bullet.contentEditable = "false";
-
-    const content = document.createElement("span");
-    content.className = "flex-1";
-
-    if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-      content.textContent = textNode.textContent;
-      textNode.parentNode?.replaceChild(listItem, textNode);
-    } else {
-      content.textContent = "";
-      range.insertNode(listItem);
-    }
-
-    listItem.appendChild(bullet);
-    listItem.appendChild(content);
-
-    // Place cursor in content
-    const newRange = document.createRange();
-    newRange.selectNodeContents(content);
-    newRange.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-  };
-
-  // Insert horizontal rule
-  const insertHorizontalRule = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-
-    const range = selection.getRangeAt(0);
-
-    const hr = document.createElement("div");
-    hr.className = "border-t border-border my-4";
-    hr.setAttribute("data-md", "---");
-    hr.contentEditable = "false";
-    hr.innerHTML = "&nbsp;";
-
-    range.insertNode(hr);
-
-    // Add line break after
-    const br = document.createElement("br");
-    hr.after(br);
-
-    // Move cursor after
-    range.setStartAfter(br);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    // Set cursor position after inserted text
+    setTimeout(() => {
+      const newPosition =
+        slashIndex !== -1 ? slashIndex + text.length : start + text.length;
+      textarea.selectionStart = textarea.selectionEnd = newPosition;
+      textarea.focus();
+    }, 0);
   };
 
   // Insert subpage reference
@@ -588,53 +377,8 @@ export default function Studio() {
         parentId: page?.id,
       });
 
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-
-        // Remove the "/" character
-        if (range.startContainer.nodeType === Node.TEXT_NODE) {
-          const textNode = range.startContainer as Text;
-          const text = textNode.textContent || "";
-          const slashIndex = text.lastIndexOf("/", range.startOffset);
-          if (slashIndex !== -1) {
-            textNode.textContent =
-              text.slice(0, slashIndex) + text.slice(range.startOffset);
-            range.setStart(textNode, slashIndex);
-            range.collapse(true);
-          }
-        }
-
-        // Create and insert the subpage element
-        const subPageElement = document.createElement("div");
-        subPageElement.className =
-          "flex items-center gap-2 p-3 my-2 neu-card rounded-lg cursor-pointer hover:neu-pressed transition-all";
-        subPageElement.setAttribute("data-page-id", newSubPage.id.toString());
-        subPageElement.setAttribute("data-page-title", newSubPage.title);
-        subPageElement.contentEditable = "false";
-
-        subPageElement.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span class="font-medium">${newSubPage.title}</span>
-        `;
-
-        subPageElement.onclick = () => navigate(`/studio/${newSubPage.id}`);
-
-        range.insertNode(subPageElement);
-
-        // Add a line break after
-        const br = document.createElement("br");
-        subPageElement.after(br);
-
-        // Move cursor after the inserted element
-        range.setStartAfter(br);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-
-        // Update content immediately
-        updateContentFromEditor();
-      }
+      const linkText = `\n> [[page:${newSubPage.id}:${newSubPage.title}]]\n`;
+      insertTextAtCursor(linkText);
     } catch (error) {
       console.error("Failed to create subpage:", error);
     }
@@ -879,19 +623,19 @@ export default function Studio() {
             </div>
           </div>
 
-          {/* Notion-style Editor */}
+          {/* Plain Text Editor */}
           <div className="flex-1 overflow-hidden">
             <div
               ref={editorRef}
               className="w-full h-full neu-card-reversed p-8 rounded-[20px] overflow-y-auto relative"
             >
-              <div
-                ref={contentEditableRef}
-                contentEditable
-                onInput={handleInput}
+              <textarea
+                ref={contentEditableRef as any}
+                value={content}
+                onChange={handleContentChange}
                 onKeyDown={handleKeyDown}
-                className="outline-none min-h-full text-foreground leading-relaxed"
-                suppressContentEditableWarning
+                className="outline-none min-h-full w-full text-foreground leading-relaxed bg-transparent border-none resize-none font-mono"
+                placeholder="Type / for commands..."
               />
 
               {/* Slash Command Menu */}
