@@ -37,6 +37,11 @@ interface PageRecord {
   image: string | null;
   thumbnail: string | null;
   createdDate?: string;
+  day: number | null;
+  month: number | null;
+  year: number | null;
+  hour: number | null;
+  minute: number | null;
   parentId: number | null;
   order: number;
   tags: PageTag[];
@@ -51,6 +56,11 @@ interface CreatePageInput {
   image?: string | null;
   thumbnail?: string | null;
   createdDate: string;
+  day?: number | null;
+  month?: number | null;
+  year?: number | null;
+  hour?: number | null;
+  minute?: number | null;
   parentId?: number | null;
   order?: number;
   tags?: TagInput[];

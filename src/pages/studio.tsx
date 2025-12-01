@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiClient, type PageRecord } from "../lib/api";
 import useDebounce from "../hooks/use-debounce";
+import ImageUpload from "../components/ImageUpload";
 import {
   FileText,
   ArrowLeft,
@@ -14,7 +15,6 @@ import {
   Minus,
   Settings,
   X,
-  Image as ImageIcon,
   Link,
 } from "lucide-react";
 
@@ -144,12 +144,22 @@ export default function Studio() {
   const [newTag, setNewTag] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [day, setDay] = useState<number | null>(null);
+  const [month, setMonth] = useState<number | null>(null);
+  const [year, setYear] = useState<number | null>(null);
+  const [hour, setHour] = useState<number | null>(null);
+  const [minute, setMinute] = useState<number | null>(null);
   const [showMetadata, setShowMetadata] = useState(false);
 
   const debouncedTitle = useDebounce(title, 1000);
   const debouncedContent = useDebounce(content, 1000);
   const debouncedImageUrl = useDebounce(imageUrl, 1000);
   const debouncedThumbnailUrl = useDebounce(thumbnailUrl, 1000);
+  const debouncedDay = useDebounce(day, 1000);
+  const debouncedMonth = useDebounce(month, 1000);
+  const debouncedYear = useDebounce(year, 1000);
+  const debouncedHour = useDebounce(hour, 1000);
+  const debouncedMinute = useDebounce(minute, 1000);
 
   // Load page data
   useEffect(() => {
@@ -163,6 +173,11 @@ export default function Studio() {
           setTags(data.tags.map((t) => ({ name: t.name, color: t.color })));
           setImageUrl(data.image || "");
           setThumbnailUrl(data.thumbnail || "");
+          setDay(data.day);
+          setMonth(data.month);
+          setYear(data.year);
+          setHour(data.hour);
+          setMinute(data.minute);
 
           // Parse content and fetch referenced page titles
           let processedContent = data.content || "";
@@ -270,6 +285,11 @@ export default function Studio() {
           debouncedContent !== page.content ||
           debouncedImageUrl !== (page.image || "") ||
           debouncedThumbnailUrl !== (page.thumbnail || "") ||
+          debouncedDay !== page.day ||
+          debouncedMonth !== page.month ||
+          debouncedYear !== page.year ||
+          debouncedHour !== page.hour ||
+          debouncedMinute !== page.minute ||
           JSON.stringify(tags) !==
             JSON.stringify(
               page.tags.map((t) => ({ name: t.name, color: t.color }))
@@ -284,6 +304,11 @@ export default function Studio() {
     debouncedContent,
     debouncedImageUrl,
     debouncedThumbnailUrl,
+    debouncedDay,
+    debouncedMonth,
+    debouncedYear,
+    debouncedHour,
+    debouncedMinute,
     tags,
   ]);
 
@@ -298,6 +323,11 @@ export default function Studio() {
           content: content || null,
           image: imageUrl || null,
           thumbnail: thumbnailUrl || null,
+          day,
+          month,
+          year,
+          hour,
+          minute,
           tags,
           createdDate: new Date().toISOString(),
         });
@@ -310,6 +340,11 @@ export default function Studio() {
           content: content || null,
           image: imageUrl || null,
           thumbnail: thumbnailUrl || null,
+          day,
+          month,
+          year,
+          hour,
+          minute,
           tags,
         });
         // Don't update page state to avoid re-render
@@ -658,28 +693,83 @@ export default function Studio() {
             {showMetadata && (
               <div className="mb-4 p-4 neu-card-reversed rounded-xl space-y-4 animate-in slide-in-from-top-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4" /> Image URL
-                    </label>
+                  <ImageUpload
+                    value={imageUrl}
+                    onChange={setImageUrl}
+                    label="Main Image"
+                    folder="images"
+                  />
+                  <ImageUpload
+                    value={thumbnailUrl}
+                    onChange={setThumbnailUrl}
+                    label="Thumbnail"
+                    folder="thumbnails"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Date & Time</label>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                     <input
-                      type="text"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                      type="number"
+                      value={day ?? ""}
+                      onChange={(e) =>
+                        setDay(e.target.value ? parseInt(e.target.value) : null)
+                      }
+                      placeholder="Day"
+                      min="1"
+                      max="31"
+                      className="p-4 rounded-lg neu-card bg-transparent outline-none text-sm"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4" /> Thumbnail URL
-                    </label>
                     <input
-                      type="text"
-                      value={thumbnailUrl}
-                      onChange={(e) => setThumbnailUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                      type="number"
+                      value={month ?? ""}
+                      onChange={(e) =>
+                        setMonth(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      placeholder="Month"
+                      min="1"
+                      max="12"
+                      className="p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                    />
+                    <input
+                      type="number"
+                      value={year ?? ""}
+                      onChange={(e) =>
+                        setYear(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      placeholder="Year"
+                      className="p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                    />
+                    <input
+                      type="number"
+                      value={hour ?? ""}
+                      onChange={(e) =>
+                        setHour(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      placeholder="Hour"
+                      min="0"
+                      max="23"
+                      className="p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                    />
+                    <input
+                      type="number"
+                      value={minute ?? ""}
+                      onChange={(e) =>
+                        setMinute(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      placeholder="Minute"
+                      min="0"
+                      max="59"
+                      className="p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
                     />
                   </div>
                 </div>
@@ -712,7 +802,7 @@ export default function Studio() {
                       onChange={(e) => setNewTag(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
                       placeholder="Add a tag..."
-                      className="flex-1 p-2 rounded-lg neu-card bg-transparent outline-none text-sm"
+                      className="flex-1 p-4 rounded-lg neu-card bg-transparent outline-none text-sm"
                     />
                     <button
                       onClick={handleAddTag}

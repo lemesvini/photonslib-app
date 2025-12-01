@@ -2,7 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient, type PageRecord } from "@/lib/api";
-import { ArrowLeft, LogOut, Plus, Edit, Trash2, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  LogOut,
+  Plus,
+  Edit,
+  Trash2,
+  FileText,
+  Maximize2,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageCard from "@/components/pageCard";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -10,12 +19,13 @@ import { useUserRole } from "@/hooks/useUserRole";
 import ConfirmDialog from "@/components/confirm-dialog";
 
 const PAGE_FILTER_TABS = [
-  { id: "library", label: "Biblioteca", filter: (_page: PageRecord) => true },
   {
     id: "collections",
     label: "Coleções",
-    filter: (page: PageRecord) => page.parentId === null,
+    filter: (page: PageRecord) =>
+      page.tags.some((tag) => tag.name === "collection"),
   },
+  { id: "library", label: "Biblioteca", filter: (_page: PageRecord) => true },
   {
     id: "gallery",
     label: "Galeria",
@@ -38,7 +48,15 @@ export function HomePage() {
   const [pagePendingDeletion, setPagePendingDeletion] =
     useState<PageRecord | null>(null);
   const [isDeletingPage, setIsDeletingPage] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const isMobile = useIsMobile();
+
+  // Switch to biblioteca tab when user searches
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      setActiveTab("library");
+    }
+  }, [searchTerm]);
 
   const handleLogout = async () => {
     await apiClient.logout();
@@ -94,17 +112,49 @@ export function HomePage() {
     fetchPages();
   }, [fetchPages]);
 
-  const formatDate = (value?: string | null) => {
-    if (!value) return "Sem data";
-    try {
-      return new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }).format(new Date(value));
-    } catch {
-      return value;
+  const formatCustomDateTime = (page: PageRecord) => {
+    const parts: string[] = [];
+
+    // Format date part (day/month/year)
+    if (page.day !== null || page.month !== null || page.year !== null) {
+      const dateParts: string[] = [];
+      if (page.day !== null) dateParts.push(String(page.day).padStart(2, "0"));
+      if (page.month !== null)
+        dateParts.push(String(page.month).padStart(2, "0"));
+      if (page.year !== null) dateParts.push(String(page.year));
+      if (dateParts.length > 0) {
+        parts.push(dateParts.join("/"));
+      }
     }
+
+    // Format time part (hour:minute)
+    if (page.hour !== null || page.minute !== null) {
+      const timeParts: string[] = [];
+      if (page.hour !== null)
+        timeParts.push(String(page.hour).padStart(2, "0"));
+      if (page.minute !== null)
+        timeParts.push(String(page.minute).padStart(2, "0"));
+      if (timeParts.length > 0) {
+        parts.push(timeParts.join(":"));
+      }
+    }
+
+    // If we have custom date/time parts, return them
+    if (parts.length > 0) {
+      return parts.join(" ");
+    }
+
+    // Fall back to createdDate if available
+    if (page.createdDate) {
+      return new Date(page.createdDate).toLocaleDateString("pt-BR");
+    }
+
+    // Final fallback to createdAt
+    if (page.createdAt) {
+      return new Date(page.createdAt).toLocaleDateString("pt-BR");
+    }
+
+    return "Sem data";
   };
 
   const filteredPages = useMemo(() => {
@@ -113,7 +163,7 @@ export function HomePage() {
       PAGE_FILTER_TABS.find((tab) => tab.id === activeTab) ||
       PAGE_FILTER_TABS[0];
 
-    return pages.filter((page) => {
+    const filtered = pages.filter((page) => {
       const matchesTab = currentTab.filter(page);
       if (!matchesTab) return false;
 
@@ -123,6 +173,20 @@ export function HomePage() {
       }`.toLowerCase();
       return haystack.includes(query);
     });
+
+    // Sort pages with "callout" tag first when in collections tab
+    if (activeTab === "collections") {
+      return filtered.sort((a, b) => {
+        const aHasCallout = a.tags.some((tag) => tag.name === "callout");
+        const bHasCallout = b.tags.some((tag) => tag.name === "callout");
+
+        if (aHasCallout && !bHasCallout) return -1;
+        if (!aHasCallout && bHasCallout) return 1;
+        return 0;
+      });
+    }
+
+    return filtered;
   }, [pages, searchTerm, activeTab]);
 
   useEffect(() => {
@@ -137,7 +201,19 @@ export function HomePage() {
         return prev;
       }
 
-      return isMobile ? null : filteredPages[0];
+      if (isMobile) {
+        return null;
+      }
+
+      // If in collections tab, prioritize page with "callout" tag
+      if (activeTab === "collections") {
+        const calloutPage = filteredPages.find((page) =>
+          page.tags.some((tag) => tag.name === "callout")
+        );
+        return calloutPage || filteredPages[0];
+      }
+
+      return filteredPages[0];
     });
 
     setSecondaryPage((prev) => {
@@ -147,7 +223,7 @@ export function HomePage() {
 
       return filteredPages.some((page) => page.id === prev.id) ? prev : null;
     });
-  }, [filteredPages, isMobile]);
+  }, [filteredPages, isMobile, activeTab]);
 
   const handleSelectPage = useCallback((page: PageRecord) => {
     setSelectedPage(page);
@@ -380,19 +456,34 @@ export function HomePage() {
         <div className={cn("flex flex-col")}>
           <header className="mb-4 space-y-1 pr-8">
             <p className="text-xs text-muted-foreground">
-              {formatDate(page.createdDate)}
+              {formatCustomDateTime(page)}
             </p>
             <h2 className="text-2xl font-semibold leading-tight text-foreground">
               {page.title}
             </h2>
           </header>
-          {pageImage ? (
-            <img
-              src={pageImage}
-              alt={`Imagem da página ${page.title}`}
-              className="h-64 w-full rounded-[24px] object-cover"
-            />
-          ) : null}
+          {pageImage && (
+            <div
+              className="mb-4 relative group cursor-pointer overflow-hidden rounded-[24px]"
+              onClick={() => setFullscreenImage(pageImage)}
+            >
+              <img
+                src={pageImage}
+                alt={`Imagem da página ${page.title}`}
+                className="h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                onError={(e) => {
+                  console.error("Failed to load image:", pageImage);
+                  e.currentTarget.style.display = "none";
+                }}
+                onLoad={() =>
+                  console.log("Image loaded successfully:", pageImage)
+                }
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                <Maximize2 className="w-12 h-12 text-white" />
+              </div>
+            </div>
+          )}
           <div className="absolute right-0 top-0 flex gap-2 m-2">
             {isAdmin && (
               <>
@@ -489,7 +580,7 @@ export function HomePage() {
       <PageCard
         key={page.id}
         page={page}
-        createdLabel={formatDate(page.createdDate)}
+        createdLabel={formatCustomDateTime(page)}
         isSelected={selectedPage?.id === page.id}
         onSelect={handleSelectPage}
       />
@@ -536,6 +627,28 @@ export function HomePage() {
             })}
           </div>
         </main>
+
+        {/* Fullscreen Image Viewer - Mobile */}
+        {fullscreenImage && (
+          <div
+            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+            onClick={() => setFullscreenImage(null)}
+          >
+            <button
+              className="absolute top-4 right-4 neu-button rounded-full p-3 text-white hover:bg-white/10 transition-colors z-10"
+              onClick={() => setFullscreenImage(null)}
+              title="Fechar"
+            >
+              <X size={24} />
+            </button>
+            <img
+              src={fullscreenImage}
+              alt="Fullscreen view"
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
       </>
     );
   }
@@ -689,6 +802,28 @@ export function HomePage() {
           )}
         </div>
       </main>
+
+      {/* Fullscreen Image Viewer */}
+      {fullscreenImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 neu-button rounded-full p-3 text-white hover:bg-white/10 transition-colors z-10"
+            onClick={() => setFullscreenImage(null)}
+            title="Fechar"
+          >
+            <X size={24} />
+          </button>
+          <img
+            src={fullscreenImage}
+            alt="Fullscreen view"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   );
 }
