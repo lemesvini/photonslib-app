@@ -351,6 +351,11 @@ export function HomePage() {
         );
       }
 
+      // Horizontal rule
+      if (line.trim() === "---") {
+        return <div key={index} className="border-t border-border my-4" />;
+      }
+
       // Headers
       if (line.startsWith("# ")) {
         return (
