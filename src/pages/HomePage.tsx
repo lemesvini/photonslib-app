@@ -67,7 +67,7 @@ export function HomePage() {
     setIsLoading(true);
     setError("");
     try {
-      const response = await apiClient.getPages({ limit: 50 });
+      const response = await apiClient.getPages({ limit: 500 });
       setPages(response.pages);
       setSecondaryPage((prev) => {
         if (!prev) {
