@@ -144,6 +144,8 @@ export default function Studio() {
   const [newTag, setNewTag] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [aiDesc, setAiDesc] = useState("");
+  const [showAiDescModal, setShowAiDescModal] = useState(false);
   const [day, setDay] = useState<number | null>(null);
   const [month, setMonth] = useState<number | null>(null);
   const [year, setYear] = useState<number | null>(null);
@@ -155,6 +157,7 @@ export default function Studio() {
   const debouncedContent = useDebounce(content, 1000);
   const debouncedImageUrl = useDebounce(imageUrl, 1000);
   const debouncedThumbnailUrl = useDebounce(thumbnailUrl, 1000);
+  const debouncedAiDesc = useDebounce(aiDesc, 1000);
   const debouncedDay = useDebounce(day, 1000);
   const debouncedMonth = useDebounce(month, 1000);
   const debouncedYear = useDebounce(year, 1000);
@@ -173,6 +176,7 @@ export default function Studio() {
           setTags(data.tags.map((t) => ({ name: t.name, color: t.color })));
           setImageUrl(data.image || "");
           setThumbnailUrl(data.thumbnail || "");
+          setAiDesc(data.aiDesc || "");
           setDay(data.day);
           setMonth(data.month);
           setYear(data.year);
@@ -290,6 +294,7 @@ export default function Studio() {
           debouncedContent !== page.content ||
           debouncedImageUrl !== (page.image || "") ||
           debouncedThumbnailUrl !== (page.thumbnail || "") ||
+          debouncedAiDesc !== (page.aiDesc || "") ||
           debouncedDay !== page.day ||
           debouncedMonth !== page.month ||
           debouncedYear !== page.year ||
@@ -309,6 +314,7 @@ export default function Studio() {
     debouncedContent,
     debouncedImageUrl,
     debouncedThumbnailUrl,
+    debouncedAiDesc,
     debouncedDay,
     debouncedMonth,
     debouncedYear,
@@ -328,6 +334,7 @@ export default function Studio() {
           content: content || null,
           image: imageUrl || null,
           thumbnail: thumbnailUrl || null,
+          aiDesc: aiDesc || null,
           day,
           month,
           year,
@@ -345,6 +352,7 @@ export default function Studio() {
           content: content || null,
           image: imageUrl || null,
           thumbnail: thumbnailUrl || null,
+          aiDesc: aiDesc || null,
           day,
           month,
           year,
@@ -817,6 +825,34 @@ export default function Studio() {
                     </button>
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Resumo de IA</label>
+                  <button
+                    onClick={() => setShowAiDescModal(true)}
+                    className="w-full px-4 py-3 rounded-lg neu-button text-sm font-medium hover:scale-105 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 16v4" />
+                      <path d="M16 14v6" />
+                      <path d="M8 14v6" />
+                      <path d="M4 8h16" />
+                      <path d="M4 12h16" />
+                      <rect width="20" height="16" x="2" y="4" rx="2" />
+                    </svg>
+                    {aiDesc ? "Editar" : "Adicionar"} Resumo de IA
+                  </button>
+                </div>
               </div>
             )}
 
@@ -895,6 +931,43 @@ export default function Studio() {
           </div>
         </div>
       </div>
+
+      {/* AI Description Modal */}
+      {showAiDescModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowAiDescModal(false)}
+        >
+          <div
+            className="neu-card rounded-[24px] p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">Resumo de IA</h3>
+              <button
+                onClick={() => setShowAiDescModal(false)}
+                className="neu-button rounded-full p-2 hover:scale-105 transition-transform"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <textarea
+              value={aiDesc}
+              onChange={(e) => setAiDesc(e.target.value)}
+              placeholder="Adicione um resumo gerado por IA ou descrição da página..."
+              className="w-full h-64 p-4 rounded-lg neu-card-reversed bg-transparent outline-none text-sm resize-none"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowAiDescModal(false)}
+                className="px-4 py-2 rounded-lg neu-button text-sm font-medium hover:scale-105 transition-transform"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -49,6 +49,8 @@ export function HomePage() {
     useState<PageRecord | null>(null);
   const [isDeletingPage, setIsDeletingPage] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [showAiDescModal, setShowAiDescModal] = useState(false);
+  const [aiDescModalContent, setAiDescModalContent] = useState("");
   const isMobile = useIsMobile();
 
   // Switch to biblioteca tab when user searches
@@ -360,7 +362,7 @@ export function HomePage() {
     onSubpageClick: (pageId: number) => void = handleOpenPrimarySubpage
   ) => {
     // Remove surrounding quotes if present (in case content was double-encoded)
-    const cleanContent = content.replace(/^"(.*)"$/, '$1');
+    const cleanContent = content.replace(/^"(.*)"$/, "$1");
     const lines = cleanContent.split("\n");
 
     return lines.map((line, index) => {
@@ -520,6 +522,36 @@ export function HomePage() {
             </div>
           )}
           <div className="absolute right-0 top-0 flex gap-2 m-2">
+            {page.aiDesc && (
+              <button
+                type="button"
+                className="neu-button rounded-[20px] h-8 w-8 text-lg font-semibold flex items-center justify-center"
+                onClick={() => {
+                  setAiDescModalContent(page.aiDesc || "");
+                  setShowAiDescModal(true);
+                }}
+                title="Ver resumo de IA"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 16v4" />
+                  <path d="M16 14v6" />
+                  <path d="M8 14v6" />
+                  <path d="M4 8h16" />
+                  <path d="M4 12h16" />
+                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                </svg>
+              </button>
+            )}
             {isAdmin && (
               <>
                 <button
@@ -857,6 +889,40 @@ export function HomePage() {
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* AI Description Modal */}
+      {showAiDescModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowAiDescModal(false)}
+        >
+          <div
+            className="neu-card rounded-[24px] p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">Resumo de IA</h3>
+              <button
+                onClick={() => setShowAiDescModal(false)}
+                className="neu-button rounded-full p-2 hover:scale-105 transition-transform"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+              {aiDescModalContent}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowAiDescModal(false)}
+                className="px-4 py-2 rounded-lg neu-button text-sm font-medium hover:scale-105 transition-transform"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
