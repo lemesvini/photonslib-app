@@ -716,6 +716,40 @@ export function HomePage() {
             />
           </div>
         )}
+
+        {/* AI Description Modal - Mobile */}
+        {showAiDescModal && (
+          <div
+            className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+            onClick={() => setShowAiDescModal(false)}
+          >
+            <div
+              className="neu-card rounded-[24px] p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold">Resumo de IA</h3>
+                <button
+                  onClick={() => setShowAiDescModal(false)}
+                  className="neu-button rounded-full p-2 hover:scale-105 transition-transform"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                {aiDescModalContent}
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setShowAiDescModal(false)}
+                  className="px-4 py-2 rounded-lg neu-button text-sm font-medium hover:scale-105 transition-transform"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
